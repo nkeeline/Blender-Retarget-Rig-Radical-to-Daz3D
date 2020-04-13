@@ -19,11 +19,14 @@ update the name of the source arm (above it's LeftForeArm) to the name fo the fo
 update the name of the destination arm name as "lForearmBend"
 if you don't have a twist bone, change the "lForearmTwist" to empty string, any thing and change the last boolean input to the function above to false.
 leave the keyframe var and don't touch it, it's the scripts way of passing to the function whether a bone should be keyframed.
-if after running the script the arm is twisted put a correction rotation in the NoCorrection are.  Available correction are in the 
+if after running the script the arm is twisted put a correction rotation in the NoCorrection are.  Available correction are in the section of the script the start of which is shown below:
 
 NoCorrection = mathutils.Quaternion((1,0,0,0))
+
 Correction_p90_Y_Quat = mathutils.Euler((math.radians(0), math.radians(90.0), math.radians(0)), 'XYZ').to_quaternion()
+
 Correction_n90_Y_Quat = mathutils.Euler((math.radians(0), math.radians(-90.0), math.radians(0)), 'XYZ').to_quaternion()
+
 .....
 
 Section, use one of the above corrections or copy and paste a row to create a new one.
