@@ -19,7 +19,7 @@ update the name of the source arm (above it's LeftForeArm) to the name of the fo
 update the name of the destination arm name.... shown as "lForearmBend" to the name of the destination bone on the destination rig you want the source bone to mapped to.
 if you don't have a twist bone, change the "lForearmTwist" to empty string, and change the last boolean input to the function above to False.
 leave the keyframe var and don't touch it, it's the scripts way of passing to the function whether a bone should be keyframed.
-if after running the script the arm is twisted put a correction rotation in the NoCorrection are.  Available correction are in the section of the script the start of which is shown below:
+if after running the script the arm is twisted put a correction rotation in for the NoCorrection unity one shown above.  Available correction are in the section of the script the start of which is shown below:
 
     NoCorrection = mathutils.Quaternion((1,0,0,0))
     Correction_p90_Y_Quat = mathutils.Euler((math.radians(0), math.radians(90.0), math.radians(0)), 'XYZ').to_quaternion()
