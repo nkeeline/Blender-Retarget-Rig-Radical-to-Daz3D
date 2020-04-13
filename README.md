@@ -24,10 +24,7 @@ if after running the script the arm is twisted put a correction rotation in the 
 NoCorrection = mathutils.Quaternion((1,0,0,0))
 Correction_p90_Y_Quat = mathutils.Euler((math.radians(0), math.radians(90.0), math.radians(0)), 'XYZ').to_quaternion()
 Correction_n90_Y_Quat = mathutils.Euler((math.radians(0), math.radians(-90.0), math.radians(0)), 'XYZ').to_quaternion()
-Correction_180_X_Quat = mathutils.Euler((math.radians(180), math.radians(0), math.radians(0)), 'XYZ').to_quaternion()
-Correction_180_Y_Quat = mathutils.Euler((math.radians(0), math.radians(180), math.radians(0)), 'XYZ').to_quaternion()
-Correction_Stoop_Quat = mathutils.Euler((math.radians(22), math.radians(0.0), math.radians(0)), 'XYZ').to_quaternion()
-Correction_p180_Y_Quat = mathutils.Euler((math.radians(0), math.radians(180), math.radians(0)), 'XYZ').to_quaternion()
+.....
 
 Section, use one of the above corrections or copy and paste a row to create a new one.
 
