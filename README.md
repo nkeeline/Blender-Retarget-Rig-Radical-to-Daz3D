@@ -1,4 +1,4 @@
-# Blender-Retarget-Rig-Radical-to-Daz3D Test
+# Blender-Retarget-Rig-Radical-to-Daz3D
 
 Tested and working on Blender 2.83
 
