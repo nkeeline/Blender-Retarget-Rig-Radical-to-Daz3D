@@ -166,6 +166,14 @@ class KeeMapSettings(bpy.types.PropertyGroup):
         default="",
         maxlen=1024
         )
+        
+    bone_mapping_file: bpy.props.StringProperty(
+        name="Bone Mapping File to Read and Save",
+        description="Select a File to Read In:",
+        default="",
+        maxlen=1024,
+        subtype='FILE_PATH'
+        )
     
 class KeeMapBoneMappingListItem(bpy.types.PropertyGroup): 
       #"""Group of properties representing a bone mapping from OpenPose to a Rig""" 
@@ -187,8 +195,36 @@ class KeeMapBoneMappingListItem(bpy.types.PropertyGroup):
         default="",
         maxlen=1024
         )
+        
+    keyframe_this_bone: bpy.props.BoolProperty(
+        name="KeyFrame This Bone",
+        description="Use this checkbox to disable keyframing of this bone for testing.",
+        default = True
+        ) 
 
+    CorrectionFactor: bpy.props.FloatVectorProperty(
+        name="Move other axis Vertically",
+        description="Move the bone in the direction you want it to go and put it's x, y and z in here to have it move in this direction when openpose Vertical motion occurs",
+        subtype = 'EULER',
+        unit = 'ROTATION',
+        default = (0.0, 0.0, 0.0), 
+        size = 3
+        )
 
+        
+    has_twist_bone: bpy.props.BoolProperty(
+        name="Has a Twist Bone",
+        description="This will apply the twist along the y axis",
+        default = False
+        ) 
+        
+
+    TwistBoneName: bpy.props.StringProperty(
+        name="Twist Bone Name",
+        description="This is the name for the rig bone name.",
+        default="",
+        maxlen=1024
+        )
 
 ####################################################################################
 ####################################################################################
@@ -282,25 +318,59 @@ class PerformAnimationTransfer(bpy.types.Operator):
             i = i + KeyFrame_Every_Nth_Frame
         
     
+class KEEMAP_TestSetRotationOfBone(bpy.types.Operator): 
+    """Maps a Single Bone on the Current Frame to Test Mapping""" 
+    bl_idname = "wm.test_set_rotation_of_bone" 
+    bl_label = "Test Bone Re-Targetting" 
+
+    def execute(self, context): 
+        scene = bpy.context.scene
+        index = scene.keemap_bone_mapping_list_index 
+        KeeMap = bpy.context.scene.keemap_settings 
+        bone_mapping_list = context.scene.keemap_bone_mapping_list
+        
+        SourceArmName = KeeMap.source_rig_name
+        DestArmName = KeeMap.destination_rig_name
+        SourceArm = bpy.data.objects[SourceArmName]
+        DestArm  = bpy.data.objects[DestArmName]
+        SourceBoneName = bone_mapping_list[index].SourceBoneName
+        DestBoneName = bone_mapping_list[index].DestinationBoneName
+        HasTwist = bone_mapping_list[index].has_twist_bone
+        TwistBoneName = bone_mapping_list[index].TwistBoneName
+        CorrectionVectorX = bone_mapping_list[index].CorrectionFactor.x
+        CorrectionVectorY = bone_mapping_list[index].CorrectionFactor.y
+        CorrectionVectorZ = bone_mapping_list[index].CorrectionFactor.z
+        CorrQuat = mathutils.Euler((math.radians(CorrectionVectorX), math.radians(CorrectionVectorY), math.radians(CorrectionVectorZ)), 'XYZ').to_quaternion()
+        SetBoneRotation(SourceArm, SourceBoneName, DestArm, DestBoneName, TwistBoneName, CorrQuat, False, HasTwist)
+        return{'FINISHED'}
+    
+    
+class KEEMAP_GetSourceBoneName(bpy.types.Operator): 
+    """If a bone is selected, get the name and popultate""" 
+    bl_idname = "wm.get_source_bone_name" 
+    bl_label = "Get Source Bone Name" 
+
+    def execute(self, context): 
+        scene = bpy.context.scene
+        index = scene.keemap_bone_mapping_list_index 
+        KeeMap = bpy.context.scene.keemap_settings 
+        bone_mapping_list = context.scene.keemap_bone_mapping_list
+        if len(context.selected_objects) == 1:
+            rigname = context.selected_objects[0].name
+        if len(context.selected_pose_bones) == 1:
+            bonename = context.selected_pose_bones[0].name
+            if rigname == KeeMap.source_rig_name:
+                bone_mapping_list[index].SourceBoneName = bonename
+            if rigname == KeeMap.destination_rig_name:
+                bone_mapping_list[index].DestinationBoneName = bonename
+        return{'FINISHED'}
+    
+    
 class KEEMAP_BONE_UL_List(bpy.types.UIList): 
     """Demo UIList.""" 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
         # We could write some code to decide which icon to use here... 
         custom_icon = 'BONE_DATA' 
-#        ob = data
-#        slot = item
-#        ma = slot.material
-#        # draw_item must handle the three layout types... Usually 'DEFAULT' and 'COMPACT' can share the same code.
-#        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-#            # You should always start your row layout by a label (icon + text), or a non-embossed text field,
-#            # this will also make the row easily selectable in the list! The later also enables ctrl-click rename.
-#            # We use icon_value of label, as our given icon is an integer value, not an enum ID.
-#            # Note "data" names should never be translated!
-#            layout.label(text="", translate=False, icon_value=custom_icon)
-#        # 'GRID' layout type should be as compact as possible (typically a single icon!).
-#        elif self.layout_type in {'GRID'}:
-#            layout.alignment = 'CENTER'
-#            layout.label(text="", icon_value=icon)
         
         # Make sure your code supports all 3 layout types if 
         if self.layout_type in {'DEFAULT', 'COMPACT'}: 
@@ -317,7 +387,7 @@ class KEEMAP_LIST_OT_NewItem(bpy.types.Operator):
 
     def execute(self, context): 
         context.scene.keemap_bone_mapping_list.add() 
-        return{'FINISHED'}      
+        return{'FINISHED'}       
     
 class KEEMAP_LIST_OT_DeleteItem(bpy.types.Operator): 
     """Delete the selected item from the list.""" 
@@ -362,6 +432,91 @@ class KEEMAP_LIST_OT_MoveItem(bpy.types.Operator):
         self.move_index() 
         return{'FINISHED'}
     
+class KEEMAP_LIST_OT_ReadInFile(bpy.types.Operator): 
+    """Read in Bone Mapping File""" 
+    bl_idname = "wm.keemap_read_file" 
+    bl_label = "Read In Bone Mapping File" 
+
+    def execute(self, context): 
+        
+        context.scene.keemap_bone_mapping_list_index = 0    
+        bone_list = context.scene.keemap_bone_mapping_list
+        bone_list.clear()
+        
+        KeeMap = bpy.context.scene.keemap_settings 
+        filepath = bpy.path.abspath(KeeMap.bone_mapping_file)
+        file = open(filepath, 'r')
+
+        data = json.load(file)
+        
+        KeeMap.facial_capture = data['start_frame_to_apply']
+        KeeMap.number_of_frames_to_apply = data['number_of_frames_to_apply']
+        KeeMap.keyframe_every_n_frames = data['keyframe_every_n_frames']
+        KeeMap.source_rig_name = data['source_rig_name']
+        KeeMap.destination_rig_name = data['destination_rig_name']
+        KeeMap.bone_mapping_file = data['bone_mapping_file']
+        i = 0
+        for p in data['bones']:
+            bone_list.add()
+            bone = bone_list[i]
+            
+            bone.name = p['name']
+            bone.label = p['label']
+            bone.description = p['description']
+            bone.DestinationBoneName = p['DestinationBoneName']
+            bone.keyframe_this_bone = p['keyframe_this_bone']
+            bone.CorrectionFactor.x = p['CorrectionFactorX']
+            bone.CorrectionFactor.y = p['CorrectionFactorY']
+            bone.CorrectionFactor.z = p['CorrectionFactorZ']
+            bone.has_twist_bone = p['has_twist_bone']
+            bone.TwistBoneName = p['TwistBoneName']
+            i = i + 1
+        file.close()
+        
+        return{'FINISHED'}
+     
+class KEEMAP_LIST_OT_SaveToFile(bpy.types.Operator): 
+    """Save Out Bone Mapping File""" 
+    bl_idname = "wm.keemap_save_file" 
+    bl_label = "Save Bone Mapping File" 
+
+    def execute(self, context): 
+        #context.scene.bone_mapping_list.clear() 
+        KeeMap = bpy.context.scene.keemap_settings 
+        filepath = bpy.path.abspath(KeeMap.bone_mapping_file)
+        file = open(filepath, 'w+')
+        
+        rootParams = {
+        "start_frame_to_apply":KeeMap.start_frame_to_apply,
+        "number_of_frames_to_apply":KeeMap.number_of_frames_to_apply,
+        "keyframe_every_n_frames":KeeMap.keyframe_every_n_frames,
+        "source_rig_name":KeeMap.source_rig_name,
+        "destination_rig_name":KeeMap.destination_rig_name,
+        "bone_mapping_file":KeeMap.bone_mapping_file
+        } 
+        bone_list = context.scene.keemap_bone_mapping_list
+        jsonbones = {}
+        jsonbones['bones'] = []
+        for bone in bone_list:
+            jsonbones['bones'].append({
+                'name': bone.name,
+                'label': bone.label,
+                'description': bone.description,
+                'SourceBoneName': bone.SourceBoneName,
+                'DestinationBoneName': bone.DestinationBoneName,
+                'keyframe_this_bone': bone.keyframe_this_bone,
+                'CorrectionFactorX': bone.CorrectionFactor.x,
+                'CorrectionFactorY': bone.CorrectionFactor.y,
+                'CorrectionFactorZ': bone.CorrectionFactor.z,
+                'has_twist_bone': bone.has_twist_bone,
+                'TwistBoneName': bone.TwistBoneName
+            })
+        jsonbones.update(rootParams)
+        print(jsonbones)
+        json.dump(jsonbones, file)  
+        file.close()
+        return{'FINISHED'} 
+    
 class KeeMapToolsPanel(bpy.types.Panel):
     """Creates a Panel for the KeeMap animation retargetting rig addon"""
     bl_label = "KeeMap"
@@ -395,9 +550,14 @@ class KeemapPanelOne(KeeMapToolsPanel, bpy.types.Panel):
         layout.prop(KeeMap, "keyframe_every_n_frames")
         layout.prop(KeeMap, "source_rig_name")
         layout.prop(KeeMap, "destination_rig_name")
+        layout.prop(KeeMap, "bone_mapping_file")
+    
+        row = layout.row()
+        row.operator("wm.keemap_read_file")
+        row.operator("wm.keemap_save_file")
           
 class KeemapPanelTwo(KeeMapToolsPanel, bpy.types.Panel):
-    bl_idname = "KEEMAP_BONEMAPPING"
+    bl_idname = "KEEMAP_PT_BONEMAPPING"
     bl_label = "Bone Mapping"
 
     def draw(self, context):
@@ -418,22 +578,37 @@ class KeemapPanelTwo(KeeMapToolsPanel, bpy.types.Panel):
             row = layout.row() 
             row.label(text="Selected Bone Mapping Parameters")
             box = layout.box()
+            box.prop(item, "name") 
             box.prop(item, "SourceBoneName") 
             box.prop(item, "DestinationBoneName")
+            box.operator('wm.get_source_bone_name', text='Populate Name w/Selection') 
+            box.prop(item, "keyframe_this_bone")
+            box.prop(item, "CorrectionFactor")            
+            row = layout.row() 
+            row.prop(item, "has_twist_bone")
+            if item.has_twist_bone:
+                box = layout.box()
+                box.prop(item, "TwistBoneName") 
+            row = layout.row() 
+            row.operator('wm.test_set_rotation_of_bone', text='Test by Setting Bone Rotation') 
 # ------------------------------------------------------------------------
 # register and unregister
 # ------------------------------------------------------------------------
 def register():
-    bpy.utils.register_class(PerformAnimationTransfer)
-    bpy.utils.register_class(KEEMAP_BONE_UL_List)
-    bpy.utils.register_class(KeeMapToolsPanel)
     bpy.utils.register_class(KeemapPanelOne)
     bpy.utils.register_class(KeemapPanelTwo)
+    bpy.utils.register_class(PerformAnimationTransfer)
+    bpy.utils.register_class(KEEMAP_BONE_UL_List)
+    bpy.utils.register_class(KEEMAP_GetSourceBoneName)
+    bpy.utils.register_class(KeeMapToolsPanel)
     bpy.utils.register_class(KeeMapBoneMappingListItem)
     bpy.utils.register_class(KeeMapSettings)
     bpy.utils.register_class(KEEMAP_LIST_OT_NewItem)
     bpy.utils.register_class(KEEMAP_LIST_OT_DeleteItem)
     bpy.utils.register_class(KEEMAP_LIST_OT_MoveItem)
+    bpy.utils.register_class(KEEMAP_TestSetRotationOfBone)
+    bpy.utils.register_class(KEEMAP_LIST_OT_ReadInFile)
+    bpy.utils.register_class(KEEMAP_LIST_OT_SaveToFile)
     bpy.types.Scene.keemap_bone_mapping_list_index = bpy.props.IntProperty()
     bpy.types.Scene.keemap_bone_mapping_list = bpy.props.CollectionProperty(type = KeeMapBoneMappingListItem) 
     bpy.types.Scene.keemap_settings = bpy.props.PointerProperty(type=KeeMapSettings)
@@ -445,10 +620,14 @@ def unregister():
     bpy.utils.unregister_class(KEEMAP_LIST_OT_NewItem)
     bpy.utils.unregister_class(KEEMAP_LIST_OT_DeleteItem)
     bpy.utils.unregister_class(KEEMAP_LIST_OT_MoveItem)
+    bpy.utils.unregister_class(KEEMAP_GetSourceBoneName)
     bpy.utils.unregister_class(KeeMapToolsPanel)
     bpy.utils.unregister_class(KeemapPanelOne)
     bpy.utils.unregister_class(KeemapPanelTwo)
     bpy.utils.unregister_class(KeeMapBoneMappingListItem)
+    bpy.utils.unregister_class(KEEMAP_TestSetRotationOfBone)
+    bpy.utils.unregister_class(KEEMAP_LIST_OT_ReadInFile)
+    bpy.utils.unregister_class(KEEMAP_LIST_OT_SaveToFile)
     del bpy.types.Scene.keemap_bone_mapping_list
     del bpy.types.Scene.keemap_bone_mapping_list_index
     del bpy.types.Scene.keemap_settings
