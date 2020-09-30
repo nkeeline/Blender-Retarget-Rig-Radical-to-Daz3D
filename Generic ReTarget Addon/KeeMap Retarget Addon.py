@@ -145,7 +145,7 @@ class KeeMapSettings(bpy.types.PropertyGroup):
     number_of_frames_to_apply: bpy.props.IntProperty(
         name = "Number of Samples",
         description="Number of Samples to read in and apply",
-        default = 10000,
+        default = 100,
         min = 0,
         max = 10000
         )
@@ -207,8 +207,8 @@ class KeeMapBoneMappingListItem(bpy.types.PropertyGroup):
         ) 
 
     CorrectionFactor: bpy.props.FloatVectorProperty(
-        name="Move other axis Vertically",
-        description="Move the bone in the direction you want it to go and put it's x, y and z in here to have it move in this direction when openpose Vertical motion occurs",
+        name="Correction Rotation",
+        description="After Setting the global position of the bone to the same as the source the script will rotate the bone by these angles afterwards to correct rotational differences between the sourc and destination bones.",
         subtype = 'EULER',
         unit = 'ROTATION',
         default = (0.0, 0.0, 0.0), 
@@ -229,6 +229,18 @@ class KeeMapBoneMappingListItem(bpy.types.PropertyGroup):
         default="",
         maxlen=1024
         )
+        
+    set_bone_position: bpy.props.BoolProperty(
+        name="Set Position of Bone",
+        description="This will set the bone position to the same position of the source bone.",
+        default = False
+        ) 
+        
+    set_bone_rotation: bpy.props.BoolProperty(
+        name="Set Rotation of Bone",
+        description="This will set the bone rotation to the same position of the source bone.",
+        default = True
+        ) 
 
 ####################################################################################
 ####################################################################################
@@ -243,12 +255,16 @@ class PerformAnimationTransfer(bpy.types.Operator):
     bl_label = "Read in OpenPose JSON Files and Apply to Character"
 
     def execute(self, context):
-        SourceArmName = "Root"
-        DestArmName = "Genesis8Male"
-        KeyFrame_Every_Nth_Frame = 3
-        NumberOfFramesToTransfer = 20
+        scene = bpy.context.scene
+        KeeMap = bpy.context.scene.keemap_settings 
+        bone_mapping_list = context.scene.keemap_bone_mapping_list
+        
+        SourceArmName = KeeMap.source_rig_name
+        DestArmName = KeeMap.destination_rig_name
+        KeyFrame_Every_Nth_Frame = KeeMap.keyframe_every_n_frames
+        NumberOfFramesToTransfer = KeeMap.number_of_frames_to_apply
         #StartFrame = scene.frame_current
-        StartFrame = 0
+        StartFrame = KeeMap.start_frame_to_apply
 
 
         print('')
@@ -256,71 +272,54 @@ class PerformAnimationTransfer(bpy.types.Operator):
         print('')
         #SourcArm = bpy.context.selected_objects[SourcArmName]
         #DestArm  = bpy.context.selected_objects[DestArmName]
-        SourceArm = bpy.data.objects[SourceArmName]
-        DestArm  = bpy.data.objects[DestArmName]
-        scene = bpy.context.scene
-        keyFrame = True
-        #destination_bone =  DestArm.pose.bones["hip"]
-        #sourceBone = SourceArm.pose.bones["Hips"]
-        #WsPosition = sourceBone.matrix.translation
-        #matrix_final = SourceArm.matrix_world @ sourceBone.matrix
-        #destination_bone.matrix.translation = matrix_final.translation
-
-        NoCorrection = mathutils.Quaternion((1,0,0,0))
-        Correction_p90_Y_Quat = mathutils.Euler((math.radians(0), math.radians(90.0), math.radians(0)), 'XYZ').to_quaternion()
-        Correction_n90_Y_Quat = mathutils.Euler((math.radians(0), math.radians(-90.0), math.radians(0)), 'XYZ').to_quaternion()
-        Correction_180_X_Quat = mathutils.Euler((math.radians(180), math.radians(0), math.radians(0)), 'XYZ').to_quaternion()
-        Correction_270_X_Quat = mathutils.Euler((math.radians(270), math.radians(0), math.radians(0)), 'XYZ').to_quaternion()
-        Correction_180_Y_Quat = mathutils.Euler((math.radians(0), math.radians(180), math.radians(0)), 'XYZ').to_quaternion()
-        Correction_Stoop_Quat1 = mathutils.Euler((math.radians(-36), math.radians(177), math.radians(3.63)), 'XYZ').to_quaternion()
-        Correction_Stoop_Quat = mathutils.Euler((math.radians(-13.5), math.radians(94.9), math.radians(-42.6)), 'XYZ').to_quaternion()
-        Correction_p180_Y_Quat = mathutils.Euler((math.radians(0), math.radians(180), math.radians(0)), 'XYZ').to_quaternion()
-
-
-
-        i=0
-        while (i < NumberOfFramesToTransfer):
-            #scene.frame_current = StartFrame + i
-            bpy.context.scene.frame_set(StartFrame + i)
-            Update()
+                    
+        if SourceArmName == "":
+            self.report({'ERROR'}, "Must Have a Source Armature Name Entered")
+        elif DestArmName == "":
+            self.report({'ERROR'}, "Must Have a Destination Armature Name Entered")
+        else:
+            SourceArm = bpy.data.objects[SourceArmName]
+            DestArm  = bpy.data.objects[DestArmName]
             
-            print('')
-            CurrentFrame = scene.frame_current
-            EndFrame =  StartFrame + NumberOfFramesToTransfer
-            PercentComplete = ((CurrentFrame - StartFrame)/(EndFrame - StartFrame))*100
-            print('Working On Frame: ' + str(scene.frame_current) + ' of ' + str(EndFrame) + ' ' + "{:.1f}".format(PercentComplete) + '%')
-            print('')
-            SetBonePosition(SourceArm, "Hips", DestArm, "hip", "", keyFrame)
+            i=0
+            while (i < NumberOfFramesToTransfer):
+                #scene.frame_current = StartFrame + i
+                bpy.context.scene.frame_set(StartFrame + i)
+                Update()
+                
+                print('')
+                CurrentFrame = scene.frame_current
+                EndFrame =  StartFrame + NumberOfFramesToTransfer
+                PercentComplete = ((CurrentFrame - StartFrame)/(EndFrame - StartFrame))*100
+                print('Working On Frame: ' + str(scene.frame_current) + ' of ' + str(EndFrame) + ' ' + "{:.1f}".format(PercentComplete) + '%')
+                print('')
 
-            SetBoneRotation(SourceArm, "Hips", DestArm, "hip", "", Correction_270_X_Quat, keyFrame, False)
-            SetBoneRotation(SourceArm, "Hips", DestArm, "pelvis", "", Correction_270_X_Quat, keyFrame, False)
-
-            SetBoneRotation(SourceArm, "Spine", DestArm, "abdomenLower", "", Correction_Stoop_Quat1, keyFrame, False)
-            SetBoneRotation(SourceArm, "Spine1", DestArm, "abdomenUpper", "", Correction_Stoop_Quat, keyFrame, False)
-            SetBoneRotation(SourceArm, "Spine2", DestArm, "chestLower", "", Correction_Stoop_Quat, keyFrame, False)
-            SetBoneRotation(SourceArm, "Spine2", DestArm, "chestUpper", "", Correction_Stoop_Quat, keyFrame, False)
-
-            SetBoneRotation(SourceArm, "RightShoulder", DestArm, "rCollar", "", Correction_p90_Y_Quat, keyFrame, False)
-            SetBoneRotation(SourceArm, "RightArm", DestArm, "rShldrBend", "rShldrTwist", NoCorrection, keyFrame, False)
-            SetBoneRotation(SourceArm, "RightForeArm", DestArm, "rForearmBend", "rForearmTwist", NoCorrection, keyFrame, True)
-
-            SetBoneRotation(SourceArm, "LeftShoulder", DestArm, "lCollar", "", Correction_n90_Y_Quat, keyFrame, False)
-            SetBoneRotation(SourceArm, "LeftArm", DestArm, "lShldrBend", "lShldrTwist", NoCorrection, keyFrame, False)
-            SetBoneRotation(SourceArm, "LeftForeArm", DestArm, "lForearmBend", "lForearmTwist", NoCorrection, keyFrame, True)
-
-            SetBoneRotation(SourceArm, "RightUpLeg", DestArm, "rThighBend", "rThighTwist", Correction_180_Y_Quat, keyFrame, False)
-            SetBoneRotation(SourceArm, "RightLeg", DestArm, "rShin", "", Correction_180_Y_Quat, keyFrame, False)
-            SetBoneRotation(SourceArm, "RightFoot", DestArm, "rFoot", "", Correction_n90_Y_Quat, keyFrame, False)
-            SetBoneRotation(SourceArm, "RightFoot", DestArm, "rMetatarsals", "", Correction_n90_Y_Quat, keyFrame, False)
-            #    SetBoneRotation(SourceArm, "RightFoot.001", DestArm, "rToe", "", NoCorrection, keyFrame, False)
-
-            SetBoneRotation(SourceArm, "LeftUpLeg", DestArm, "lThighBend", "lThighTwist", Correction_180_Y_Quat, keyFrame, False)
-            SetBoneRotation(SourceArm, "LeftLeg", DestArm, "lShin", "", Correction_180_Y_Quat, keyFrame, False)
-            SetBoneRotation(SourceArm, "LeftFoot", DestArm, "lFoot", "", Correction_p90_Y_Quat, keyFrame, False)
-            SetBoneRotation(SourceArm, "LeftFoot", DestArm, "lMetatarsals", "", Correction_p90_Y_Quat, keyFrame, False)
-            #    SetBoneRotation(SourceArm, "LeftFoot.001", DestArm, "lToe", "", Correction_n90_Y_Quat, keyFrame, False)
-            i = i + KeyFrame_Every_Nth_Frame
+                SourceBoneName = bone_settings.SourceBoneName
+                DestBoneName = bone_settings.DestinationBoneName
+                
+                if SourceBoneName == "":
+                    self.report({'ERROR'}, "Must Have a Source Bone Name Entered")
+                elif DestBoneName == "":
+                    self.report({'ERROR'}, "Must Have a Destination Bone Name Entered")
+                else:
+                    # CODE FOR SETTING BONE POSITIONS:
+                    for bone_settings in bone_mapping_list:
+                        bone = DestArm.pose.bones[bone_settings.DestinationBoneName]
+                        bone.rotation_mode = 'XYZ'
+                        bone.rotation_euler = mathutils.Euler((0.0, 0.0, 0.0), 'XYZ')
+                        bone.rotation_mode = 'QUATERNION'
+                        
+                        CorrectionVectorX = bone_settings.CorrectionFactor.x
+                        CorrectionVectorY = bone_settings.CorrectionFactor.y
+                        CorrectionVectorZ = bone_settings.CorrectionFactor.z
+                        CorrQuat = mathutils.Euler((math.radians(CorrectionVectorX), math.radians(CorrectionVectorY), math.radians(CorrectionVectorZ)), 'XYZ').to_quaternion()
+                        if bone_settings.set_bone_position:
+                            SetBonePosition(SourceArm, bone_settings.SourceBoneName, DestArm, bone_settings.DestinationBoneName, bone_settings.TwistBoneName, bone_settings.keyframe_this_bone)
+                        if bone_settings.set_bone_rotation:
+                            SetBoneRotation(SourceArm, bone_settings.SourceBoneName, DestArm, bone_settings.DestinationBoneName, bone_settings.TwistBoneName, CorrQuat, bone_settings.keyframe_this_bone, bone_settings.has_twist_bone)
+                i = i + KeyFrame_Every_Nth_Frame
         
+        return{'FINISHED'}
     
 class KEEMAP_TestSetRotationOfBone(bpy.types.Operator): 
     """Maps a Single Bone on the Current Frame to Test Mapping""" 
@@ -345,7 +344,11 @@ class KEEMAP_TestSetRotationOfBone(bpy.types.Operator):
         CorrectionVectorY = bone_mapping_list[index].CorrectionFactor.y
         CorrectionVectorZ = bone_mapping_list[index].CorrectionFactor.z
         CorrQuat = mathutils.Euler((math.radians(CorrectionVectorX), math.radians(CorrectionVectorY), math.radians(CorrectionVectorZ)), 'XYZ').to_quaternion()
-        SetBoneRotation(SourceArm, SourceBoneName, DestArm, DestBoneName, TwistBoneName, CorrQuat, False, HasTwist)
+        if bone_mapping_list[index].set_bone_rotation:
+            SetBoneRotation(SourceArm, SourceBoneName, DestArm, DestBoneName, TwistBoneName, CorrQuat, False, HasTwist)
+        if bone_mapping_list[index].set_bone_position:
+            SetBonePosition(SourceArm, SourceBoneName, DestArm, DestBoneName, TwistBoneName, False)
+        
         return{'FINISHED'}
     
     
@@ -532,6 +535,8 @@ class KEEMAP_LIST_OT_ReadInFile(bpy.types.Operator):
             bone.CorrectionFactor.z = p['CorrectionFactorZ']
             bone.has_twist_bone = p['has_twist_bone']
             bone.TwistBoneName = p['TwistBoneName']
+            bone.set_bone_position = p['set_bone_position'],
+            bone.set_bone_rotation = p['set_bone_rotation']
             i = i + 1
         file.close()
         
@@ -571,7 +576,9 @@ class KEEMAP_LIST_OT_SaveToFile(bpy.types.Operator):
                 'CorrectionFactorY': bone.CorrectionFactor.y,
                 'CorrectionFactorZ': bone.CorrectionFactor.z,
                 'has_twist_bone': bone.has_twist_bone,
-                'TwistBoneName': bone.TwistBoneName
+                'TwistBoneName': bone.TwistBoneName,
+                'set_bone_position': bone.set_bone_position,
+                'set_bone_rotation': bone.set_bone_rotation
             })
         jsonbones.update(rootParams)
         print(jsonbones)
@@ -644,16 +651,20 @@ class KeemapPanelTwo(KeeMapToolsPanel, bpy.types.Panel):
             box.prop(item, "SourceBoneName") 
             box.prop(item, "DestinationBoneName")
             box.operator('wm.get_source_bone_name', text='Populate Name w/Selection') 
-            box.prop(item, "keyframe_this_bone")
-            box.prop(item, "CorrectionFactor")            
+            box.prop(item, "keyframe_this_bone")    
             row = layout.row() 
-            row.prop(item, "has_twist_bone")
-            if item.has_twist_bone:
+            row.prop(item, "set_bone_rotation")
+            if item.set_bone_rotation:
                 box = layout.box()
-                box.prop(item, "TwistBoneName") 
+                box.prop(item, "CorrectionFactor")    
+                box.operator('wm.get_bone_rotation_correction', text='CALC') 
+                box.prop(item, "has_twist_bone")
+                if item.has_twist_bone:
+                    box.prop(item, "TwistBoneName")            
             row = layout.row() 
-            row.operator('wm.get_bone_rotation_correction', text='Auto Calc Correction') 
-            row.operator('wm.test_set_rotation_of_bone', text='Test by Setting Bone Rotation') 
+            row.prop(item, "set_bone_position")
+            row = layout.row() 
+            row.operator('wm.test_set_rotation_of_bone', text='TEST')
 # ------------------------------------------------------------------------
 # register and unregister
 # ------------------------------------------------------------------------
