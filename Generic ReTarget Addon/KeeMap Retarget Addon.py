@@ -459,12 +459,21 @@ class KEEMAP_GetSourceBoneName(bpy.types.Operator):
         bone_mapping_list = context.scene.keemap_bone_mapping_list
         if len(context.selected_objects) == 1:
             rigname = context.selected_objects[0].name
-        if len(context.selected_pose_bones) == 1:
             bonename = context.selected_pose_bones[0].name
+        elif len(context.selected_objects) == 2:
+            bonename = context.selected_pose_bones[0].name
+            rig1 = context.selected_objects[0]
+            if rig1.pose.bones.find(bonename) == -1:
+                rigname = context.selected_objects[1].name
+            else:
+                rigname = context.selected_objects[0].name
+        if len(context.selected_pose_bones) == 1:
             if rigname == KeeMap.source_rig_name:
                 bone_mapping_list[index].SourceBoneName = bonename
             if rigname == KeeMap.destination_rig_name:
                 bone_mapping_list[index].DestinationBoneName = bonename
+            if bone_mapping_list[index].name == '':
+                bone_mapping_list[index].name = bonename
         return{'FINISHED'}  
     
 class KEEMAP_AutoGetBoneCorrection(bpy.types.Operator): 
