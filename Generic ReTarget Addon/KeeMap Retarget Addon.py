@@ -219,6 +219,12 @@ class KeeMapSettings(bpy.types.PropertyGroup):
         maxlen=1024,
         subtype='FILE_PATH'
         )
+        
+    keyframe_test: bpy.props.BoolProperty(
+        name="KeyFrame Test",
+        description="Use this checkbox to enable keyframing of this bone while testing.",
+        default = False
+        ) 
     
 class KeeMapBoneMappingListItem(bpy.types.PropertyGroup): 
       #"""Group of properties representing a bone mapping from OpenPose to a Rig""" 
@@ -383,6 +389,10 @@ class KEEMAP_TestSetRotationOfBone(bpy.types.Operator):
         KeeMap = bpy.context.scene.keemap_settings 
         bone_mapping_list = context.scene.keemap_bone_mapping_list
         
+        #if the box is checked we're going to keyframe no matter what:
+        if KeeMap.keyframe_test:
+            self.keyframe = True
+            
         #print('')
         #print('Test Pressed:')
         SourceArmName = KeeMap.source_rig_name
@@ -833,7 +843,8 @@ class KeemapPanelTwo(KeeMapToolsPanel, bpy.types.Panel):
             row.prop(item, "set_bone_position")
             row = layout.row() 
             row.operator('wm.test_set_rotation_of_bone', text='TEST').index2pose = -1
-            row.operator('wm.test_all_bones', text='TEST ALL')
+            row.operator('wm.test_all_bones', text='TEST ALL').keyframe = KeeMap.keyframe_test
+            layout.prop(KeeMap, "keyframe_test")
 # ------------------------------------------------------------------------
 # register and unregister
 # ------------------------------------------------------------------------
